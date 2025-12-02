@@ -2,23 +2,15 @@ name: Prometheus SDET Challenge CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main" ]
   pull_request:
+    branches: [ "main" ]
 
 jobs:
-  test:
+
+  api-tests:
+    name: test (api, ApiTests/ApiTests.csproj)
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - name: api
-            project: ApiTests/ApiTests.csproj
-          - name: ui
-            project: UiTests/UiTests.csproj
-
-    env:
-      DOTNET_VERSION: "8.0.x"
 
     steps:
       - name: Checkout repository
@@ -27,30 +19,55 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore PrometheusSdetChallenge.sln
+        run: dotnet restore ApiTests/ApiTests.csproj
 
-      - name: Install Playwright browsers (UI only)
-        if: matrix.name == 'ui'
+      - name: Build API project
+        run: dotnet build ApiTests/ApiTests.csproj --configuration Release --no-restore
+
+      - name: Run API tests
+        run: dotnet test ApiTests/ApiTests.csproj --logger trx --results-directory TestResults
+
+      - name: Upload API Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: TestResults/
+
+
+  ui-tests:
+    name: test (ui, UiTests/UiTests.csproj)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore UiTests/UiTests.csproj
+
+      - name: Build UI project
+        run: dotnet build UiTests/UiTests.csproj --configuration Release --no-restore
+
+      # 👉 IMPORTANT: Install browsers AFTER build
+      - name: Install Playwright browsers
         run: |
           dotnet tool install --global Microsoft.Playwright.CLI
           playwright install --with-deps
 
-      - name: Build solution
-        run: dotnet build PrometheusSdetChallenge.sln --configuration Release --no-restore
+      - name: Run UI tests
+        env:
+          HEADED: true
+        run: dotnet test UiTests/UiTests.csproj --logger trx --results-directory TestResults
 
-      - name: Run tests (${{ matrix.name }})
-        run: |
-          dotnet test ${{ matrix.project }} \
-            --configuration Release \
-            --no-build \
-            --logger "trx;LogFileName=${{ matrix.name }}.trx" \
-            --results-directory TestResults/${{ matrix.name }}
-
-      - name: Publish test results (${{ matrix.name }})
+      - name: Upload UI Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.name }}
-          path: TestResults/${{ matrix.name }}
+          name: ui-test-res
