@@ -6,11 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: read
-
-# ---------------- API TEST JOB ----------------
 jobs:
+  # =======================
+  # API TESTS (NET 7)
+  # =======================
   test-api:
     name: test (api, ApiTests/ApiTests.csproj)
     runs-on: ubuntu-latest
@@ -22,28 +21,31 @@ jobs:
       - name: Setup .NET 7
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '7.0.x'
+          dotnet-version: 7.0.x
 
       - name: Restore API dependencies
         run: dotnet restore ApiTests/ApiTests.csproj
 
       - name: Build API project
-        run: dotnet build ApiTests/ApiTests.csproj --configuration Debug --no-restore
+        run: dotnet build ApiTests/ApiTests.csproj --no-restore
 
       - name: Run API tests
-        run: dotnet test ApiTests/ApiTests.csproj \
-          --configuration Debug \
-          --logger "trx;LogFileName=ApiTests.trx" \
-          --results-directory TestResults/api
+        run: |
+          dotnet test ApiTests/ApiTests.csproj \
+            --no-build \
+            --logger "trx;LogFileName=ApiTests.trx" \
+            --results-directory TestResults/api
 
       - name: Upload API Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ApiTestResults
+          name: api-test-results
           path: TestResults/api
 
-  # ---------------- UI TEST JOB ----------------
+  # =======================
+  # UI TESTS (NET 8 + Playwright)
+  # =======================
   test-ui:
     name: test (ui, UiTests/UiTests.csproj)
     runs-on: ubuntu-latest
@@ -55,27 +57,32 @@ jobs:
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: 8.0.x
 
       - name: Restore UI dependencies
         run: dotnet restore UiTests/UiTests.csproj
 
       - name: Build UI project
-        run: dotnet build UiTests/UiTests.csproj --configuration Debug --no-restore
+        run: dotnet build UiTests/UiTests.csproj --no-restore
 
-      # IMPORTANT: Install Playwright browsers *after* build using the generated script
+      - name: Install Playwright CLI
+        run: dotnet tool install --global Microsoft.Playwright.CLI
+
       - name: Install Playwright browsers
-        run: pwsh ./UiTests/bin/Debug/net8.0/playwright.ps1 install --with-deps
+        run: playwright install --with-deps
 
       - name: Run UI tests
-        run: dotnet test UiTests/UiTests.csproj \
-          --configuration Debug \
-          --logger "trx;LogFileName=UiTests.trx" \
-          --results-directory TestResults/ui
+        env:
+          HEADED: 0   # change to 1 if you ever run headed on a self-hosted runner
+        run: |
+          dotnet test UiTests/UiTests.csproj \
+            --no-build \
+            --logger "trx;LogFileName=UiTests.trx" \
+            --results-directory TestResults/ui
 
       - name: Upload UI Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: UiTestResults
+          name: ui-test-results
           path: TestResults/ui
