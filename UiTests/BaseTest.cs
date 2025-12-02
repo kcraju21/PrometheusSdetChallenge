@@ -1,5 +1,6 @@
 using Microsoft.Playwright;
 using NUnit.Framework;
+using System;
 using System.Threading.Tasks;
 
 namespace UiTests
@@ -15,11 +16,39 @@ namespace UiTests
         {
             _playwright = await Playwright.CreateAsync();
 
-            // 👇 Add SlowMo to visibly slow down automation
-            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            // Decide headed/headless
+            var isCi = Environment.GetEnvironmentVariable("CI") == "true";
+            var headedEnv = Environment.GetEnvironmentVariable("HEADED");
+
+            // Local default: headed (visible)
+            // CI default: headless
+            bool headed;
+            if (isCi)
             {
-                Headless = false,   // show browser
-                SlowMo = 5000       // <-- SLOW DOWN EVERY ACTION BY 5000ms
+                headed = false;
+            }
+            else if (headedEnv == "0")
+            {
+                headed = false;
+            }
+            else if (headedEnv == "1")
+            {
+                headed = true;
+            }
+            else
+            {
+                headed = true;
+            }
+
+            _browser = await _playwright.Chromium.LaunchAsync(new()
+            {
+                Headless = !headed,
+                Args = new[]
+                {
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox"
+                }
             });
 
             var context = await _browser.NewContextAsync(new BrowserNewContextOptions
@@ -28,24 +57,18 @@ namespace UiTests
             });
 
             Page = await context.NewPageAsync();
-
-            Console.WriteLine("🚀 Browser launched with SlowMo (500ms).");
         }
 
         [TearDown]
         public async Task Teardown()
         {
-            Console.WriteLine("🧹 Cleaning up browser...");
-
-            if (Page != null)
+            if (Page is not null)
                 await Page.CloseAsync();
 
-            if (_browser != null)
+            if (_browser is not null)
                 await _browser.CloseAsync();
 
             _playwright?.Dispose();
-
-            Console.WriteLine("✅ Browser closed.");
         }
     }
 }
