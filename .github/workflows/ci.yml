@@ -6,8 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
-jobs:
+permissions:
+  contents: read
 
+# ---------------- API TEST JOB ----------------
+jobs:
   test-api:
     name: test (api, ApiTests/ApiTests.csproj)
     runs-on: ubuntu-latest
@@ -16,30 +19,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET (7.0 + 8.0)
+      - name: Setup .NET 7
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            7.0.x
-            8.0.x
+          dotnet-version: '7.0.x'
 
-      - name: Restore dependencies
+      - name: Restore API dependencies
         run: dotnet restore ApiTests/ApiTests.csproj
 
       - name: Build API project
-        run: dotnet build ApiTests/ApiTests.csproj --configuration Release --no-restore
+        run: dotnet build ApiTests/ApiTests.csproj --configuration Debug --no-restore
 
       - name: Run API tests
-        run: dotnet test ApiTests/ApiTests.csproj --logger "trx;LogFileName=api-tests.trx"
-        continue-on-error: false
+        run: dotnet test ApiTests/ApiTests.csproj \
+          --configuration Debug \
+          --logger "trx;LogFileName=ApiTests.trx" \
+          --results-directory TestResults/api
 
       - name: Upload API Test Results
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: api-test-results
-          path: "**/api-tests.trx"
+          name: ApiTestResults
+          path: TestResults/api
 
-
+  # ---------------- UI TEST JOB ----------------
   test-ui:
     name: test (ui, UiTests/UiTests.csproj)
     runs-on: ubuntu-latest
@@ -48,30 +52,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET (7.0 + 8.0)
+      - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            7.0.x
-            8.0.x
+          dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
+      - name: Restore UI dependencies
         run: dotnet restore UiTests/UiTests.csproj
 
       - name: Build UI project
-        run: dotnet build UiTests/UiTests.csproj --configuration Release --no-restore
+        run: dotnet build UiTests/UiTests.csproj --configuration Debug --no-restore
 
+      # IMPORTANT: Install Playwright browsers *after* build using the generated script
       - name: Install Playwright browsers
-        run: |
-          echo "Installing Playwright..."
-          pwsh -command "npx playwright install --with-deps"
+        run: pwsh ./UiTests/bin/Debug/net8.0/playwright.ps1 install --with-deps
 
       - name: Run UI tests
-        run: dotnet test UiTests/UiTests.csproj --logger "trx;LogFileName=ui-tests.trx"
-        continue-on-error: false
+        run: dotnet test UiTests/UiTests.csproj \
+          --configuration Debug \
+          --logger "trx;LogFileName=UiTests.trx" \
+          --results-directory TestResults/ui
 
       - name: Upload UI Test Results
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: ui-test-results
-          path: "**/ui-tests.trx"
+          name: UiTestResults
+          path: TestResults/ui
