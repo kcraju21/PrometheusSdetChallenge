@@ -1,0 +1,56 @@
+name: Prometheus SDET Challenge CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - name: api
+            project: ApiTests/ApiTests.csproj
+          - name: ui
+            project: UiTests/UiTests.csproj
+
+    env:
+      DOTNET_VERSION: "8.0.x"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore PrometheusSdetChallenge.sln
+
+      - name: Install Playwright browsers (UI only)
+        if: matrix.name == 'ui'
+        run: |
+          dotnet tool install --global Microsoft.Playwright.CLI
+          playwright install --with-deps
+
+      - name: Build solution
+        run: dotnet build PrometheusSdetChallenge.sln --configuration Release --no-restore
+
+      - name: Run tests (${{ matrix.name }})
+        run: |
+          dotnet test ${{ matrix.project }} \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=${{ matrix.name }}.trx" \
+            --results-directory TestResults/${{ matrix.name }}
+
+      - name: Publish test results (${{ matrix.name }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.name }}
+          path: TestResults/${{ matrix.name }}
