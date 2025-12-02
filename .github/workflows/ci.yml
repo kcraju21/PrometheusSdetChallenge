@@ -2,13 +2,13 @@ name: Prometheus SDET Challenge CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
 
 jobs:
 
-  api-tests:
+  test-api:
     name: test (api, ApiTests/ApiTests.csproj)
     runs-on: ubuntu-latest
 
@@ -16,10 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (7.0 + 8.0)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            7.0.x
+            8.0.x
 
       - name: Restore dependencies
         run: dotnet restore ApiTests/ApiTests.csproj
@@ -28,16 +30,17 @@ jobs:
         run: dotnet build ApiTests/ApiTests.csproj --configuration Release --no-restore
 
       - name: Run API tests
-        run: dotnet test ApiTests/ApiTests.csproj --logger trx --results-directory TestResults
+        run: dotnet test ApiTests/ApiTests.csproj --logger "trx;LogFileName=api-tests.trx"
+        continue-on-error: false
 
       - name: Upload API Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: api-test-results
-          path: TestResults/
+          path: "**/api-tests.trx"
 
 
-  ui-tests:
+  test-ui:
     name: test (ui, UiTests/UiTests.csproj)
     runs-on: ubuntu-latest
 
@@ -45,10 +48,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (7.0 + 8.0)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            7.0.x
+            8.0.x
 
       - name: Restore dependencies
         run: dotnet restore UiTests/UiTests.csproj
@@ -56,18 +61,17 @@ jobs:
       - name: Build UI project
         run: dotnet build UiTests/UiTests.csproj --configuration Release --no-restore
 
-      # 👉 IMPORTANT: Install browsers AFTER build
       - name: Install Playwright browsers
         run: |
-          dotnet tool install --global Microsoft.Playwright.CLI
-          playwright install --with-deps
+          echo "Installing Playwright..."
+          pwsh -command "npx playwright install --with-deps"
 
       - name: Run UI tests
-        env:
-          HEADED: true
-        run: dotnet test UiTests/UiTests.csproj --logger trx --results-directory TestResults
+        run: dotnet test UiTests/UiTests.csproj --logger "trx;LogFileName=ui-tests.trx"
+        continue-on-error: false
 
       - name: Upload UI Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: ui-test-res
+          name: ui-test-results
+          path: "**/ui-tests.trx"
